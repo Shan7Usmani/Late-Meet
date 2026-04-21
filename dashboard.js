@@ -26,16 +26,54 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (message.type === 'STATE_UPDATE') {
       updateDashboard(message.state);
     }
+    if (message.type === 'SESSION_ENDED') {
+      // Reload sessions if on that tab
+      const sessionsTab = document.querySelector('[data-tab="sessions"]');
+      if (sessionsTab?.classList.contains('active')) {
+        loadSavedSessions();
+      }
+    }
   });
 
-  // ——— Start Audio Capture (User Gesture) ———
+  // ——— Start Audio Capture (User Gesture via tabCapture) ———
   const audioBtn = document.getElementById('dash-start-audio-btn');
   audioBtn?.addEventListener('click', async () => {
     try {
-      await chrome.runtime.sendMessage({ type: 'START_AUDIO' });
-      setAudioBtnActive(true);
+      audioBtn.disabled = true;
+      audioBtn.textContent = 'Starting...';
+
+      const meetTabs = await chrome.tabs.query({ url: 'https://meet.google.com/*' });
+      if (meetTabs.length === 0) {
+        throw new Error('No Google Meet tab found');
+      }
+      const meetTab = meetTabs[0];
+      const urlMatch = meetTab.url?.match(/meet\.google\.com\/([a-z\-]+)/);
+      const meetingId = urlMatch ? urlMatch[1] : null;
+
+      const response = await chrome.runtime.sendMessage({
+        type: 'MANUAL_START_AUDIO',
+        tabId: meetTab.id,
+        meetingId: meetingId
+      });
+
+      if (response && response.success) {
+        setAudioBtnActive(true);
+        // Start timer immediately
+        startTimer(Date.now());
+        const statusText = document.getElementById('dash-status-text');
+        const statusDot = document.querySelector('.dash-status-dot');
+        if (statusText) statusText.textContent = `Meeting active — ${meetingId || 'unknown'}`;
+        if (statusDot) statusDot.classList.add('active');
+      } else {
+        throw new Error(response?.error || 'Failed to start audio');
+      }
     } catch (err) {
       console.error('[Dashboard] Failed to start audio:', err);
+      audioBtn.disabled = false;
+      audioBtn.textContent = err.message.length > 30 ? 'Error — Retry' : err.message;
+      setTimeout(() => {
+        audioBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon" style="margin-right: 6px;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" x2="12" y1="19" y2="22"></line></svg> Start Audio';
+      }, 3000);
     }
   });
 
@@ -110,6 +148,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Timeline Tab
     updateTimeline(state.timeline);
+
+    // Transcript Tab
+    updateTranscript(state.transcript);
   }
 
   // ——— Sentiment ———
@@ -264,6 +305,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     return iconBase + '<line x1="12" x2="12" y1="20" y2="4"></line><line x1="6" x2="18" y1="20" y2="20"></line><line x1="14" x2="14" y1="4" y2="10"></line></svg>';
   }
 
+  // ——— Live Transcript ———
+  function updateTranscript(transcript) {
+    const container = document.getElementById('dash-transcript-list');
+    if (!container) return;
+    if (!transcript || transcript.length === 0) {
+      container.innerHTML = '<div class="empty-msg">No transcript yet. Start audio to begin capturing speech.</div>';
+      return;
+    }
+
+    const startTime = transcript[0]?.timestamp || Date.now();
+
+    container.innerHTML = transcript.map((entry, index) => {
+      const elapsed = Math.round(((entry.timestamp || Date.now()) - startTime) / 1000);
+      const timeStr = formatDuration(elapsed);
+      const speaker = escapeHtml(entry.speaker || 'Unknown');
+      const initials = speaker.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+      const isAudio = (entry.speaker || '') === 'Audio';
+      const text = escapeHtml(entry.text || '');
+
+      return `
+        <div class="transcript-entry ${isAudio ? 'audio-source' : ''}">
+          <div class="transcript-time">${timeStr}</div>
+          <div class="transcript-avatar">${isAudio ? '🎙' : initials}</div>
+          <div class="transcript-body">
+            <div class="transcript-speaker">${speaker}</div>
+            <div class="transcript-text">${text}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Auto-scroll to bottom
+    container.scrollTop = container.scrollHeight;
+  }
+
   // ——— Export ———
   document.getElementById('export-btn').addEventListener('click', async () => {
     try {
@@ -312,6 +388,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // ——— Helpers ———
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
   function formatDuration(seconds) {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -424,15 +506,4 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Load sessions on tab switch
   document.querySelector('[data-tab="sessions"]')?.addEventListener('click', loadSavedSessions);
-
-  // Listen for session ended
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message.type === 'SESSION_ENDED') {
-      // Reload sessions if on that tab
-      const sessionsTab = document.querySelector('[data-tab="sessions"]');
-      if (sessionsTab?.classList.contains('active')) {
-        loadSavedSessions();
-      }
-    }
-  });
 });
