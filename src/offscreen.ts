@@ -392,53 +392,77 @@ async function startCapture(
 }
 
 async function stopCapture() {
-  if (chunkTimer) {
-    clearInterval(chunkTimer);
-    chunkTimer = null;
-  }
-
-  if (vadTimer) {
-    clearInterval(vadTimer);
-    vadTimer = null;
+  // Prevent concurrent cleanup execution
+  if (isStopping) {
+    return;
   }
 
   isStopping = true;
 
-  if (
-    mediaRecorder &&
-    mediaRecorder.state !== "inactive"
-  ) {
-    const recorder = mediaRecorder;
+  try {
+    if (chunkTimer) {
+      clearInterval(chunkTimer);
+      chunkTimer = null;
+    }
 
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(resolve, 2000);
+    if (vadTimer) {
+      clearInterval(vadTimer);
+      vadTimer = null;
+    }
 
-      recorder.addEventListener(
-        "stop",
-        () => resolve(),
-        { once: true },
-      );
+    if (
+      mediaRecorder &&
+      mediaRecorder.state !== "inactive"
+    ) {
+      const recorder = mediaRecorder;
 
-      recorder.addEventListener(
-        "error",
-        () => resolve(),
-        { once: true },
-      );
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(resolve, 2000);
 
-      recorder.stop();
+        recorder.addEventListener(
+          "stop",
+          () => resolve(),
+          { once: true },
+        );
 
-      recorder.addEventListener(
-        "stop",
-        () => clearTimeout(timeout),
-        { once: true },
-      );
-    });
+        recorder.addEventListener(
+          "error",
+          () => resolve(),
+          { once: true },
+        );
+
+        try {
+          recorder.stop();
+        } catch (err) {
+          console.warn(
+            "[LateMeet][offscreen] Recorder stop failed:",
+            err,
+          );
+          resolve();
+        }
+
+        recorder.addEventListener(
+          "stop",
+          () => clearTimeout(timeout),
+          { once: true },
+        );
+      });
+    }
+
+    await drainPendingChunks();
+
+    await cleanupResources();
+  } catch (err) {
+    console.error(
+      "[LateMeet][offscreen] stopCapture failed:",
+      err,
+    );
+
+    await cleanupResources();
   }
-
-  await drainPendingChunks();
-
-  await cleanupResources();
 }
+
+
 
 chrome.runtime.onMessage.addListener(
   (message, _sender, sendResponse) => {
