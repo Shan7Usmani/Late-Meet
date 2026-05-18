@@ -642,12 +642,15 @@ async function startAudioCapture(
     }
 
     const settings = await getSettings();
+    const raw = settings.vadThreshold;
+    const vadThreshold =
+      typeof raw === "number" && Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : 0.012;
     const response = await chrome.runtime.sendMessage({
       type: "OFFSCREEN_START_CAPTURE",
       streamId,
       tabId,
       includeMicrophone,
-      vadThreshold: settings.vadThreshold ?? 0.012,
+      vadThreshold,
     });
 
     if (!response?.success) {
@@ -847,9 +850,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const prompt = getTranscriptionPrompt();
           const rawText = await transcribeChunk(message.audioBase64, message.mimeType, prompt);
           if (rawText) {
-            console.log("[LateMeet] transcript (raw):", rawText);
+            console.log(`[LateMeet] transcript received — ${rawText.length} chars`);
             const refinedText = await refineTranscription(rawText);
-            console.log("[LateMeet] transcript (refined):", refinedText);
+            console.log(`[LateMeet] transcript refined — ${refinedText.length} chars`);
             state.transcript.push({ speaker: "Audio", text: refinedText, timestamp: Date.now() });
             await summarizeTranscriptIfNeeded();
             await broadcastStateUpdate();

@@ -114,16 +114,29 @@ async function flushAudioChunk(force = false) {
 
     // In continuous mode, dataavailable only fires on requestData() or stop().
     // We must wait for the event before draining so the new blob lands in pendingChunks.
+    // A 1 000 ms timeout guards against the event never firing (browser throttling,
+    // system load) which would otherwise leave isFlushInProgress permanently true.
     await new Promise<void>((resolve) => {
       const recorder = mediaRecorder!;
-      const onData = () => resolve();
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        recorder.removeEventListener("dataavailable", onData);
+        resolve();
+      };
+      const onData = () => finish();
+      const timeoutId = setTimeout(() => {
+        relay("requestData timeout — resuming with queued chunks");
+        finish();
+      }, 1000);
       recorder.addEventListener("dataavailable", onData, { once: true });
       try {
         recorder.requestData();
       } catch (err) {
         console.error("[LateMeet][offscreen] requestData failed:", err);
-        recorder.removeEventListener("dataavailable", onData);
-        resolve();
+        finish();
       }
     });
 
