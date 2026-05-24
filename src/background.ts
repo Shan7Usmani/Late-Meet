@@ -519,11 +519,19 @@ function notifyNewActionItems(items: ActionItem[]) {
   for (const item of items) {
     const key = actionItemKey(item);
     if (!key || notifiedActionItems.has(key)) continue;
-    notifiedActionItems.add(key);
     const message = key.length > 100 ? key.slice(0, 97) + "..." : key;
     const notifId = `lm-action-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     chrome.notifications.create(notifId, {
       type: "basic",
+      iconUrl: chrome.runtime.getURL("src/icons/icon128.png"),
+      title: "New Action Item",
+      message,
+      priority: 1,
+    }, () => {
+      if (!chrome.runtime.lastError) {
+        notifiedActionItems.add(key);
+      }
+    });
       iconUrl: chrome.runtime.getURL("src/icons/icon128.png"),
       title: "New Action Item",
       message,
