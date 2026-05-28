@@ -2,6 +2,16 @@
 
 import { State } from "./types";
 import { audioFileExtensionForMimeType, isChunkViable } from "./audioProcessing";
+import {
+  deleteSavedMeetingSession,
+  discardPendingMeetingSession,
+  getSavedMeetingSessions,
+  isStorageQuotaError,
+  persistMeetingSession,
+  persistPendingMeetingSession,
+  savePendingMeetingSession,
+  StoredSession,
+} from "./sessionStorage";
 
 const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_WHISPER_URL = "https://api.openai.com/v1/audio/transcriptions";
@@ -274,6 +284,7 @@ function snapshot() {
     keyInsights: state.keyInsights,
     questionsRaised: state.questionsRaised,
     participants: state.participants,
+    initialParticipants: state.initialParticipants,
     lateJoiners: state.lateJoiners,
     timeline: state.timeline,
     transcript: state.transcript,
@@ -835,16 +846,29 @@ async function maybeWelcomeJoiners(tabId: number | undefined, joiners: string[])
 }
 
 async function savePendingSession() {
-  const session = {
+  const session: StoredSession = {
     id: crypto.randomUUID(),
     ...snapshot(),
     savedAt: Date.now(),
     isActive: false,
   };
-  await chrome.storage.local.set({ pendingSession: session });
+
+  inMemoryPendingSession = session;
+
+  try {
+    await savePendingMeetingSession(chrome.storage.local, session);
+  } catch (err) {
+    console.error("[LateMeet] Failed to save pending session:", err);
+    if (isStorageQuotaError(err)) {
+      console.error(
+        "[LateMeet] Storage quota reached while saving pending session. Keep this extension active and export the session before closing Chrome.",
+      );
+    }
+  }
 }
 
 let isProcessingSession = false;
+let inMemoryPendingSession: StoredSession | null = null;
 
 async function persistSession() {
   if (isProcessingSession) {
@@ -853,28 +877,15 @@ async function persistSession() {
   }
   isProcessingSession = true;
   try {
-    const { pendingSession, savedSessions } = await chrome.storage.local.get([
-      "pendingSession",
-      "savedSessions",
-    ]);
-    if (!pendingSession) {
-      console.log("[LateMeet] No pending session found to save.");
-      return;
+    let session: StoredSession;
+    try {
+      session = await persistPendingMeetingSession(chrome.storage.local);
+    } catch (err) {
+      if (!inMemoryPendingSession) throw err;
+      session = await persistMeetingSession(chrome.storage.local, inMemoryPendingSession);
     }
-
-    const sessions = Array.isArray(savedSessions) ? savedSessions : [];
-
-    // Check if the session ID already exists in savedSessions to prevent duplicate entries
-    const sessionExists = sessions.some((s: any) => s.id === pendingSession.id);
-    if (sessionExists) {
-      await chrome.storage.local.set({ pendingSession: null });
-      console.log("[LateMeet] Session already persisted, cleared pending session.");
-      return;
-    }
-
-    sessions.unshift(pendingSession);
-    await chrome.storage.local.set({ savedSessions: sessions, pendingSession: null });
-    console.log("[LateMeet] Session successfully saved:", pendingSession.id);
+    inMemoryPendingSession = null;
+    console.log("[LateMeet] Session successfully saved:", session.id);
   } catch (err) {
     console.error("[LateMeet] Error persisting session:", err);
     throw err;
@@ -890,7 +901,8 @@ async function discardPendingSession() {
   }
   isProcessingSession = true;
   try {
-    await chrome.storage.local.set({ pendingSession: null });
+    inMemoryPendingSession = null;
+    await discardPendingMeetingSession(chrome.storage.local);
     console.log("[LateMeet] Pending session discarded.");
   } catch (err) {
     console.error("[LateMeet] Error discarding session:", err);
@@ -1226,16 +1238,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       case "GET_SAVED_SESSIONS": {
-        const { savedSessions } = await chrome.storage.local.get("savedSessions");
-        sendResponse(Array.isArray(savedSessions) ? savedSessions : []);
+        const sessions = await getSavedMeetingSessions(chrome.storage.local);
+        sendResponse(sessions);
         return;
       }
 
       case "DELETE_SAVED_SESSION": {
-        const { savedSessions } = await chrome.storage.local.get("savedSessions");
-        const sessions = Array.isArray(savedSessions) ? savedSessions : [];
-        const next = sessions.filter((s) => s.id !== message.sessionId);
-        await chrome.storage.local.set({ savedSessions: next });
+        await deleteSavedMeetingSession(chrome.storage.local, message.sessionId);
         sendResponse({ success: true });
         return;
       }
