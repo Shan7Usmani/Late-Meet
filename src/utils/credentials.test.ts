@@ -65,10 +65,7 @@ test("save writes plaintext to session and encrypted to local", async () => {
 });
 
 test("getApiCredentials returns plaintext from session when available", async () => {
-  setupChromeStorage(
-    { openai_api_key: "session-key", elevenlabs_api_key: "session-eleven" },
-    {},
-  );
+  setupChromeStorage({ openai_api_key: "session-key", elevenlabs_api_key: "session-eleven" }, {});
 
   const creds = await getApiCredentials();
   assert.equal(creds.openai_api_key, "session-key");
@@ -90,10 +87,7 @@ test("getApiCredentials decrypts local credentials when session is empty", async
 });
 
 test("getOpenAiApiKey and getElevenLabsApiKey work correctly", async () => {
-  setupChromeStorage(
-    { openai_api_key: "openai-foo", elevenlabs_api_key: "elevenlabs-bar" },
-    {},
-  );
+  setupChromeStorage({ openai_api_key: "openai-foo", elevenlabs_api_key: "elevenlabs-bar" }, {});
 
   assert.equal(await getOpenAiApiKey(), "openai-foo");
   assert.equal(await getElevenLabsApiKey(), "elevenlabs-bar");
@@ -119,7 +113,10 @@ test("clearing credentials removes from both local and session", async () => {
 test("saving credentials trims whitespace", async () => {
   const { session, local } = setupChromeStorage();
 
-  await saveApiCredentials({ openai_api_key: "  spaced-key  ", elevenlabs_api_key: "  spaced-eleven  " });
+  await saveApiCredentials({
+    openai_api_key: "  spaced-key  ",
+    elevenlabs_api_key: "  spaced-eleven  ",
+  });
 
   assert.equal(session.openai_api_key, "spaced-key");
   assert.equal(session.elevenlabs_api_key, "spaced-eleven");

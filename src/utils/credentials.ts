@@ -1,4 +1,3 @@
-const STORAGE_KEY_ID = "credential_encryption_key_id";
 const ENCRYPTED_MARKER = "enc:";
 
 export type CredentialKey = "openai_api_key" | "elevenlabs_api_key";
@@ -15,26 +14,16 @@ function normalizedCredential(value: unknown): string | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// SubtleCrypto AES-GCM helpers
+// SubtleCrypto AES-GCM + PBKDF2 helpers
 // ---------------------------------------------------------------------------
 
 const AES_ALGORITHM = "AES-GCM";
 const AES_KEY_LENGTH = 256;
 const IV_LENGTH = 12;
-
-function arrayBufferToHex(buf: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function hexToArrayBuffer(hex: string): ArrayBuffer {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
-  }
-  return bytes.buffer;
-}
+const PBKDF2_ITERATIONS = 100_000;
+const SALT_LENGTH = 16;
+const SALT_STORAGE_KEY = "credential_encryption_salt";
+const SEED_STORAGE_KEY = "credential_encryption_seed";
 
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
   return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)).buffer;
@@ -44,56 +33,40 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
   return btoa(String.fromCharCode(...new Uint8Array(buf)));
 }
 
-async function generateEncryptionKey(): Promise<CryptoKey> {
-  return crypto.subtle.generateKey(
+async function deriveEncryptionKey(seed: ArrayBuffer, salt: ArrayBuffer): Promise<CryptoKey> {
+  const keyMaterial = await crypto.subtle.importKey("raw", seed, "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
+    keyMaterial,
     { name: AES_ALGORITHM, length: AES_KEY_LENGTH },
-    true,
+    false,
     ["encrypt", "decrypt"],
   );
 }
 
-async function exportKey(key: CryptoKey): Promise<string> {
-  const raw = await crypto.subtle.exportKey("raw", key);
-  return arrayBufferToHex(raw);
-}
-
-async function importKey(hex: string): Promise<CryptoKey> {
-  const raw = hexToArrayBuffer(hex);
-  return crypto.subtle.importKey("raw", raw, { name: AES_ALGORITHM }, false, [
-    "encrypt",
-    "decrypt",
-  ]);
-}
-
-async function getOrCreateEncryptionKey(): Promise<CryptoKey | null> {
-  const { [STORAGE_KEY_ID]: keyId } = await chrome.storage.session.get(STORAGE_KEY_ID);
-  if (typeof keyId === "string") {
-    return importKey(keyId);
-  }
-  return null;
-}
-
-async function createAndStoreEncryptionKey(): Promise<CryptoKey> {
-  const key = await generateEncryptionKey();
-  const keyId = await exportKey(key);
-  await chrome.storage.session.set({ [STORAGE_KEY_ID]: keyId });
-  return key;
-}
-
 async function ensureEncryptionKey(): Promise<CryptoKey | null> {
-  const existing = await getOrCreateEncryptionKey();
-  if (existing) return existing;
-  return createAndStoreEncryptionKey();
+  const { [SALT_STORAGE_KEY]: storedSalt, [SEED_STORAGE_KEY]: storedSeed } =
+    await chrome.storage.local.get([SALT_STORAGE_KEY, SEED_STORAGE_KEY]);
+
+  if (typeof storedSalt === "string" && typeof storedSeed === "string") {
+    return deriveEncryptionKey(base64ToArrayBuffer(storedSeed), base64ToArrayBuffer(storedSalt));
+  }
+
+  // First run — generate and persist salt + seed in local storage
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+  const seed = crypto.getRandomValues(new Uint8Array(32));
+  await chrome.storage.local.set({
+    [SALT_STORAGE_KEY]: arrayBufferToBase64(salt.buffer),
+    [SEED_STORAGE_KEY]: arrayBufferToBase64(seed.buffer),
+  });
+
+  return deriveEncryptionKey(seed.buffer, salt.buffer);
 }
 
 async function encrypt(plaintext: string, key: CryptoKey): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
   const encoded = new TextEncoder().encode(plaintext);
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: AES_ALGORITHM, iv },
-    key,
-    encoded,
-  );
+  const ciphertext = await crypto.subtle.encrypt({ name: AES_ALGORITHM, iv }, key, encoded);
   // Prepend IV to ciphertext, base64-encode the whole thing
   const combined = new Uint8Array(iv.length + ciphertext.byteLength);
   combined.set(iv);
@@ -105,17 +78,11 @@ async function decrypt(encoded: string, key: CryptoKey): Promise<string> {
   const combined = base64ToArrayBuffer(encoded);
   const iv = new Uint8Array(combined.slice(0, IV_LENGTH));
   const ciphertext = combined.slice(IV_LENGTH);
-  const decrypted = await crypto.subtle.decrypt(
-    { name: AES_ALGORITHM, iv },
-    key,
-    ciphertext,
-  );
+  const decrypted = await crypto.subtle.decrypt({ name: AES_ALGORITHM, iv }, key, ciphertext);
   return new TextDecoder().decode(decrypted);
 }
 
-async function encryptCredentials(
-  credentials: ApiCredentials,
-): Promise<ApiCredentials> {
+async function encryptCredentials(credentials: ApiCredentials): Promise<ApiCredentials> {
   const key = await ensureEncryptionKey();
   if (!key) return credentials;
 
@@ -128,9 +95,7 @@ async function encryptCredentials(
   return encrypted;
 }
 
-async function decryptCredentials(
-  encrypted: ApiCredentials,
-): Promise<ApiCredentials> {
+async function decryptCredentials(encrypted: ApiCredentials): Promise<ApiCredentials> {
   const key = await ensureEncryptionKey();
   if (!key) return {};
 
