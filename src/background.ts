@@ -630,7 +630,7 @@ ${topicDetectionEnabled ? "- Identify distinct topics and their statuses (active
 ${decisionDetectionEnabled ? "- Precisely capture decisions. Classify as 'tentative' if there are hedging phrases (maybe, probably), otherwise 'finalized'." : ""}
 ${actionExtractionEnabled ? "- Precisely capture action items. Rate confidence (high/medium/low). Prevent speculative statements from appearing as confirmed by setting isSpeculative to true." : ""}
 ${sentimentAnalysisEnabled ? "- Detect the prevailing sentiment and emotional dynamics." : ""}
-- Extract \"Key Insights\" with a confidenceScore (0-100) based on linguistic certainty.
+- Extract "Key Insights" with a confidenceScore (0-100) based on linguistic certainty.
 - Track contradiction persistence if someone disagrees or contradicts a previous point.
 - Track specific questions raised that remain unanswered.
 
