@@ -20,6 +20,6 @@ jobs:
 
       - name: Run Snyk to check for vulnerabilities
         if: env.SNYK_TOKEN != ''
-        uses: snyk/actions/node@b9895aaaf619edc880295175cf6d2e6840742131 # master
+        uses: snyk/actions/node@0.4.0
         with:
           args: --severity-threshold=high
