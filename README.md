@@ -152,7 +152,7 @@ It uses **Chrome's native `tabCapture` API** to intercept audio without adding p
 <br/>
 
 <div align="center">
-  <img src="docs/assets/demo/late-meet-workflow.gif" alt="Late Meet end-to-end product workflow demo GIF" width="88%"/>
+  <img src="https://github.com/user-attachments/assets/37078eaa-4964-4f4b-a4d8-1283d76fde2c" alt="Late Meet end-to-end product workflow demo GIF" width="88%"/>
   <br/><br/>
   <sub><i>End-to-end workflow demo — Loading the unpacked extension in Chrome, configuring API keys, joining Google Meet, starting the Copilot, and viewing the live side-panel dashboard.</i></sub>
 </div>
@@ -164,7 +164,7 @@ It uses **Chrome's native `tabCapture` API** to intercept audio without adding p
 <br/>
 
 <div align="center">
-  <img src="docs/assets/screenshots/dashboard-side-panel.png" alt="Late Meet real-time side-panel dashboard" width="88%"/>
+  <img src="https://github.com/user-attachments/assets/fc9c4a23-325f-473d-bbfa-c18951a418bf" alt="Late Meet real-time side-panel dashboard" width="88%"/>
   <br/><br/>
   <sub><i>Live side-panel dashboard showing transcription, topics, action items, sentiment analysis, and speaker timelines.</i></sub>
 </div>
@@ -176,7 +176,7 @@ It uses **Chrome's native `tabCapture` API** to intercept audio without adding p
 <br/>
 
 <div align="center">
-  <img src="docs/assets/screenshots/meet-start-copilot.png" alt="Start Copilot Google Meet overlay" width="88%"/>
+  <img src="https://github.com/user-attachments/assets/7e320db9-f9be-49ad-9c2b-e9ac6415b201" alt="Start Copilot Google Meet overlay" width="88%"/>
   <br/><br/>
   <sub><i>Floating meeting copilot injected cleanly onto Google Meet. Join late -> catch up instantly without adding noisy bots.</i></sub>
 </div>
@@ -186,7 +186,7 @@ It uses **Chrome's native `tabCapture` API** to intercept audio without adding p
 <br/>
 
 <div align="center">
-  <img src="docs/assets/screenshots/extension-loaded.png" alt="Late Meet loaded in Chrome extensions" width="88%"/>
+  <img src="https://github.com/user-attachments/assets/d7a99014-a2e7-475a-81b0-cfee521ba9d8" alt="Late Meet loaded in Chrome extensions" width="88%"/>
   <br/><br/>
   <sub><i>Unpacked extension successfully loaded under Developer Mode in Chrome Extensions.</i></sub>
 </div>
@@ -198,7 +198,7 @@ It uses **Chrome's native `tabCapture` API** to intercept audio without adding p
 <br/>
 
 <div align="center">
-  <img src="docs/assets/screenshots/options.png" alt="Options page key configuration" width="88%"/>
+  <img src="https://github.com/user-attachments/assets/1ceb0397-1607-477a-be23-0b00670bf29b" alt="Options page key configuration" width="88%"/>
   <br/><br/>
   <sub><i>Securely input your ElevenLabs and OpenAI API keys. Stored strictly in local browser storage — 100% private.</i></sub>
 </div>
@@ -210,7 +210,7 @@ It uses **Chrome's native `tabCapture` API** to intercept audio without adding p
 <br/>
 
 <div align="center">
-  <img src="docs/assets/screenshots/popup.png" alt="Late Meet extension popup control" width="40%"/>
+  <img src="https://github.com/user-attachments/assets/69c0048b-da30-4c0d-a501-b9209ff1531c" alt="Late Meet extension popup control" width="40%"/>
   <br/><br/>
   <sub><i>One-click Copilot control, live recording duration timer, and direct access to options.</i></sub>
 </div>
