@@ -167,9 +167,12 @@ src/
 ├── types.ts             # TypeScript type definitions
 ├── manifest.json        # Chrome extension manifest (MV3)
 └── utils/
-    ├── api.ts           # API helper functions
-    ├── credentials.ts   # API credential storage helpers
-    └── prompts.ts       # Prompt templates for AI summaries
+    ├── api.ts                    # API helper functions
+    ├── credentials.ts            # API credential storage helpers
+    ├── credentials.test.ts       # Tests for credential storage helpers
+    ├── indexedDbCache.ts         # IndexedDB caching utilities
+    ├── storageUtils.ts           # Chrome storage utility helpers
+    └── prompts.ts                # Prompt templates for AI summaries
 ```
 
 ---
