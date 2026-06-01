@@ -63,8 +63,7 @@ let autoLockTimer: ReturnType<typeof setTimeout> | null = null;
 function resetAutoLockTimer() {
   if (autoLockTimer) clearTimeout(autoLockTimer);
   autoLockTimer = setTimeout(() => {
-    derivedKey = null;
-    autoLockTimer = null;
+    lockCredentials();
   }, AUTO_LOCK_TIMEOUT_MS);
 }
 
