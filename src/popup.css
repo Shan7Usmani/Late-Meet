@@ -688,7 +688,6 @@ body::-webkit-scrollbar-thumb {
     transform 0.3s ease,
     color 0.3s ease;
 }
-
 .dashboard-btn:hover .btn-arrow {
   transform: translate(2px, -2px);
   color: var(--text-main);
