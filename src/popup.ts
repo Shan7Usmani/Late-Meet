@@ -118,6 +118,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     const textEl = btn.querySelector(".copilot-btn-text");
     const originalText = textEl?.textContent || "Start";
 
+    // --- Pre-flight Check for API Keys ---
+    const keys = await getApiCredentials();
+    if (!keys.openai_api_key) {
+      alert("Please configure your OpenAI API Key in the Settings before starting.");
+      chrome.runtime.openOptionsPage();
+      return;
+    }
+
     if (lastState?.audioActive) {
       console.log("[LateMeet] Audio already active, skipping capture request.");
       return;
