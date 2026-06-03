@@ -1,9 +1,15 @@
 // Shared DOM utility helpers used by popup.ts and dashboard.ts
 
+const HTML_ESCAPE_MAP: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#039;",
+};
+
 export function escapeHtml(value: string | null | undefined): string {
-  const div = document.createElement("div");
-  div.textContent = String(value ?? "");
-  return div.innerHTML;
+  return String(value ?? "").replace(/[&<>"']/g, (char) => HTML_ESCAPE_MAP[char]);
 }
 
 export function formatDuration(seconds: number): string {
