@@ -10,6 +10,7 @@ import {
 import { initTheme } from "./theme.js";
 import { resolveManualMeetTab } from "./meetingTabs";
 import { startDashboardAudioCapture } from "./dashboardCapture";
+import { escapeHtml, formatDuration, sanitizeTopicStatus } from "./utils/domHelpers";
 
 initTheme();
 
@@ -1379,25 +1380,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   // ——— Helpers ———
-  function escapeHtml(str: string) {
-    const div = document.createElement("div");
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
-  function sanitizeTopicStatus(status: string) {
-    if (status === "completed") return "completed";
-    if (status === "unresolved") return "unresolved";
-    return "active";
-  }
-
-  function formatDuration(seconds: number) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  }
-
   // ——— Meeting History Tab ———
   let sessionToDelete: string | null = null;
 

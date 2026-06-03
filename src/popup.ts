@@ -6,6 +6,7 @@ import {
   unlockCredentials,
   isUnlocked,
 } from "./utils/credentials";
+import { escapeHtml, formatDuration, sanitizeTopicStatus } from "./utils/domHelpers";
 import { validateOpenAIKey } from "./utils/api.js";
 import { resolveManualMeetTab } from "./meetingTabs";
 import { startPopupAudioCapture } from "./popupCapture";
@@ -615,13 +616,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // ——— Helpers ———
-  function formatDuration(seconds: number) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  }
-
   function getSentimentEmoji(sentiment: string) {
     const map: Record<string, string> = {
       positive: "😊",
@@ -630,17 +624,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       mixed: "🤔",
     };
     return map[sentiment] || "—";
-  }
-
-  function sanitizeTopicStatus(status: string): string {
-    if (status === "completed" || status === "unresolved") return status;
-    return "active";
-  }
-
-  function escapeHtml(value: string | null | undefined) {
-    const div = document.createElement("div");
-    div.textContent = String(value || "");
-    return div.innerHTML;
   }
 
   function shakeElement(el: HTMLElement | null) {
