@@ -462,6 +462,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
       if (statusDot) statusDot.classList.remove("active");
       if (statusText) statusText.textContent = "No active meeting";
+      setAudioBtnActive(false);
       if (timerInterval) {
         window.clearInterval(timerInterval);
         timerInterval = null;
