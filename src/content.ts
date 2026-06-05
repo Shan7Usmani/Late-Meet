@@ -667,6 +667,15 @@ void initTheme().catch((err) => console.error(err));
     return false;
   });
 
+  window.addEventListener("beforeunload", () => {
+    try {
+      // Fire-and-forget message to auto-save the session on tab close
+      chrome.runtime.sendMessage({ type: "SAVE_SESSION" }).catch(() => {});
+    } catch {
+      // Ignore errors during unload
+    }
+  });
+
   startParticipantPolling();
   startActiveSpeakerDetection();
   if (window.location.pathname.length > 5 && !window.location.pathname.includes("/_")) {
