@@ -895,7 +895,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 Export
               </button>
               <button class="session-export-btn session-download-btn"data-session-id="${sanitizeDataAttr(s.id)}" title="Download as Markdown File">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"troke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
                 Download
               </button>
               <button class="session-delete-btn" data-session-id="${sanitizeDataAttr(s.id)}" title="Delete session">
@@ -960,6 +960,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     return md;
   }
 
+  // @ts-ignore
   function exportSessionMarkdown(session: State) {
     const md = generateSessionMarkdown(session);
 
@@ -975,7 +976,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         );
       });
   }
-
+  // @ts-ignore
   function downloadSessionMarkdown(session: State) {
     const md = generateSessionMarkdown(session);
 
