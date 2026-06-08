@@ -121,3 +121,50 @@ export interface StorageStats {
   largestMeetings: MeetingStorageInfo[];
   warningThreshold: number;
 }
+
+
+// ============================================================
+// Storage Types — for type-safe chrome.storage operations
+// ============================================================
+
+/** A single meeting session stored by the extension */
+export interface MeetingSession {
+  id: string;
+  tabId: number;
+  meetingUrl: string;
+  meetingTitle: string;
+  startTime: number;        // Unix timestamp (ms)
+  endTime: number | null;   // null if recording is still active
+  durationMs: number | null;
+  participants: string[];
+  transcript: TranscriptEntry[];
+  summary: string | null;
+  language: string;         // BCP 47 language tag (e.g., "en-US")
+  schemaVersion: number;    // For migration support
+}
+
+/** A single transcript entry with speaker and timestamp */
+export interface TranscriptEntry {
+  speaker: string;
+  text: string;
+  timestamp: number;        // Offset from meeting start in ms
+  confidence: number;       // 0.0 to 1.0
+}
+
+/** Root schema for chrome.storage.local */
+export interface StorageSchema {
+  apiKey: string | null;
+  encryptedApiKey: string | null;
+  sessions: MeetingSession[];
+  preferences: ExtensionPreferences;
+  schemaVersion: number;
+}
+
+/** User preferences for the extension */
+export interface ExtensionPreferences {
+  autoStart: boolean;
+  language: string;
+  showTranscriptInMeeting: boolean;
+  summaryStyle: 'brief' | 'detailed' | 'bullets';
+  theme: 'light' | 'dark' | 'system';
+}
