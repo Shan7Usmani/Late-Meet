@@ -1036,6 +1036,9 @@ const audioChunkQueue = new AudioChunkQueue<QueuedAudioChunk>({
     addTimeline(`Audio chunk ${id} processing failed`);
     await broadcastStateUpdate();
   },
+  onDrain: () => {
+    chrome.runtime.sendMessage({ type: "OFFSCREEN_RESUME_RECORDING" }).catch(() => {});
+  },
 });
 
 function detectNewJoiners(currentList: string[], tabId: number): string[] {
@@ -1561,6 +1564,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
 
+      case "OFFSCREEN_RESUME_RECORDING": {
+        sendResponse({ success: true });
+        return;
+      }
+
       case "OFFSCREEN_AUDIO_CHUNK": {
         if (!state.isActive) {
           console.warn("[LateMeet] chunk received but session not active — ignored");
@@ -1594,6 +1602,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             queued: false,
             pending: result.pending,
             error: result.error,
+            pauseRecorder: true,
           });
           return;
         }
