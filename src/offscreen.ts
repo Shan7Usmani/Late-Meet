@@ -303,6 +303,29 @@ function connectSourceToRecorder(
   audioSources.push(source);
 }
 
+async function stopMediaRecorder() {
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    const recorder = mediaRecorder;
+
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(resolve, 2000);
+
+      recorder.addEventListener("stop", () => resolve(), { once: true });
+
+      recorder.addEventListener("error", () => resolve(), { once: true });
+
+      try {
+        recorder.stop();
+      } catch (err) {
+        console.warn("[LateMeet][offscreen] Recorder stop failed:", err);
+        resolve();
+      }
+
+      recorder.addEventListener("stop", () => clearTimeout(timeout), { once: true });
+    });
+  }
+}
+
 async function startCapture(
   streamId: string,
   _tabId: number,
@@ -332,10 +355,26 @@ async function startCapture(
 
       if (isStopping) return;
 
+      isStopping = true;
+
       try {
-        await stopCapture();
+        if (vadTimer) {
+          clearInterval(vadTimer);
+          vadTimer = null;
+        }
+
+        if (waveformTimer) {
+          clearInterval(waveformTimer);
+          waveformTimer = null;
+        }
+
+        await stopMediaRecorder();
+
+        await drainPendingChunks();
+        await cleanupResources();
       } catch (err) {
         console.error("[LateMeet][offscreen] Cleanup after track end failed:", err);
+        await cleanupResources();
       } finally {
         await chrome.runtime
           .sendMessage({
@@ -474,26 +513,7 @@ async function stopCapture() {
       waveformTimer = null;
     }
 
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      const recorder = mediaRecorder;
-
-      await new Promise<void>((resolve) => {
-        const timeout = setTimeout(resolve, 2000);
-
-        recorder.addEventListener("stop", () => resolve(), { once: true });
-
-        recorder.addEventListener("error", () => resolve(), { once: true });
-
-        try {
-          recorder.stop();
-        } catch (err) {
-          console.warn("[LateMeet][offscreen] Recorder stop failed:", err);
-          resolve();
-        }
-
-        recorder.addEventListener("stop", () => clearTimeout(timeout), { once: true });
-      });
-    }
+    await stopMediaRecorder();
 
     await drainPendingChunks();
 
@@ -537,6 +557,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
 
     if (message.type === "OFFSCREEN_STOP_CAPTURE") {
+      if (isStopping) {
+        sendResponse({ success: false, alreadyStopping: true });
+        return;
+      }
+
       try {
         await stopCapture();
       } finally {
