@@ -1434,7 +1434,7 @@ async function startAudioCapture(
     const settings = await getSettings();
     const raw = settings.vadThreshold;
     const vadThreshold =
-      typeof raw === "number" && Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : 0.012;
+      typeof raw === "number" && Number.isFinite(raw) && raw >= 0.001 && raw <= 1.0 ? raw : 0.012;
     const response = await chrome.runtime.sendMessage({
       type: "OFFSCREEN_START_CAPTURE",
       streamId,

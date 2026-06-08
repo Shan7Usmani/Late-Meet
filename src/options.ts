@@ -330,10 +330,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (validatedInterval > 300) validatedInterval = 300;
 
       const parsedVadThreshold = vadSlider ? parseFloat(vadSlider.value) : 0.012;
-      const validatedVadThreshold =
+      let validatedVadThreshold =
         Number.isNaN(parsedVadThreshold) || !Number.isFinite(parsedVadThreshold)
           ? 0.012
           : parsedVadThreshold;
+      if (validatedVadThreshold < 0.001) validatedVadThreshold = 0.001;
+      if (validatedVadThreshold > 1.0) validatedVadThreshold = 1.0;
 
       const newSettings: Settings = {
         ...settings, // Retain existing unmapped fields
