@@ -75,6 +75,7 @@
 > The website linked in project metadata is **not** part of this repository — please do not open issues about website UI/UX or bugs here.
 
 ---
+
 ## 📚 Table of Contents
 
 - [The Problem](#-the-problem)
