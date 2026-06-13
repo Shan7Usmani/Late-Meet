@@ -1,5 +1,5 @@
 import { VoiceActivityTracker, isChunkViable } from "./audioProcessing";
-import { VAD_FFT_SIZE, computeRms, shouldRunVadAnalysis } from "./vadTuning";
+import { computeRms, shouldRunVadAnalysis } from "./vadTuning";
 import {
   connectMicrophoneToOffscreenAudioGraph,
   createOffscreenAudioGraph,
@@ -526,11 +526,6 @@ async function startCapture(
     await audioContext.resume();
   }
 
-  const destination = audioContext.createMediaStreamDestination();
-
-  analyserNode = audioContext.createAnalyser();
-  analyserNode.fftSize = VAD_FFT_SIZE;
-  analysisBuffer = new Uint8Array(analyserNode.fftSize);
   const audioGraph = createOffscreenAudioGraph(audioContext, mediaStream);
   const destination = audioGraph.recorderDestination;
 
