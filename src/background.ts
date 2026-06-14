@@ -272,14 +272,18 @@ const state: State = {
 };
 
 async function trackUsage(delta: UsageDelta) {
-  try {
-    await updateUsageStats(delta);
-    const { tokens, cost } = calculateDeltaCost(delta);
-    state.tokensUsed = (state.tokensUsed ?? 0) + tokens;
-    state.estimatedCost = (state.estimatedCost ?? 0) + cost;
+  const currentMeetingId = state.meetingId;
+  const { tokens, cost } = calculateDeltaCost(delta);
+
+  state.tokensUsed = (state.tokensUsed ?? 0) + tokens;
+  state.estimatedCost = (state.estimatedCost ?? 0) + cost;
+
+  updateUsageStats(delta).catch((err) => {
+    console.error("[LateMeet] Failed to persist usage stats:", err);
+  });
+
+  if (state.meetingId === currentMeetingId) {
     await broadcastStateUpdate();
-  } catch (err) {
-    console.error("[LateMeet] Failed to track usage:", err);
   }
 }
 
@@ -386,6 +390,8 @@ async function hydrateState() {
             state.targetTabId = stored.targetTabId;
           if (typeof stored.participantCount === "number")
             state.participantCount = stored.participantCount;
+          if (typeof stored.tokensUsed === "number") state.tokensUsed = stored.tokensUsed;
+          if (typeof stored.estimatedCost === "number") state.estimatedCost = stored.estimatedCost;
         }
 
         // Restore guard flags alongside state

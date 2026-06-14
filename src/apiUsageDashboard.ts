@@ -49,7 +49,8 @@ function getWindowStats(
     }
   } else {
     for (let i = 0; i < window; i++) {
-      const d = new Date(now.getTime() - i * 86400_000);
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
       const key = dateKey(d);
       if (stats[key]) {
         tokens += stats[key].totalTokens;
@@ -67,10 +68,11 @@ function dateKey(d: Date): string {
 }
 
 function formatAudio(secs: number): string {
-  if (secs < 1) return "0s";
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = Math.round(secs % 60);
+  const totalSecs = Math.round(secs);
+  if (totalSecs < 1) return "0s";
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
