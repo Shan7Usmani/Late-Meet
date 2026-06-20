@@ -217,15 +217,15 @@ test("noise gate: default initial threshold", () => {
   assert.equal(gate.getThreshold(), 0.024); // 0.012 * 2.0
 });
 
-test("noise gate: process returns current threshold", () => {
+test("noise gate: analyze returns current threshold", () => {
   const gate = new AdaptiveNoiseGate({ initialThreshold: 0.01 });
-  const threshold = gate.process(0.005);
+  const threshold = gate.analyze(0.005);
   assert.equal(threshold, 0.02);
 });
 
 test("noise gate: speech keeps gate open via hold counter", () => {
   const gate = new AdaptiveNoiseGate({ initialThreshold: 0.01, holdFrames: 3 });
-  gate.process(0.03); // speech (above 0.02 threshold)
+  gate.analyze(0.03); // speech (above 0.02 threshold)
   assert.ok(gate.isOpen, "gate should open after speech");
   gate.tick();
   assert.ok(gate.isOpen, "gate should stay open after 1 tick");
@@ -237,10 +237,10 @@ test("noise gate: speech keeps gate open via hold counter", () => {
 
 test("noise gate: hold counter resets on repeated speech", () => {
   const gate = new AdaptiveNoiseGate({ initialThreshold: 0.01, holdFrames: 2 });
-  gate.process(0.03); // speech
+  gate.analyze(0.03); // speech
   gate.tick();
   assert.ok(gate.isOpen);
-  gate.process(0.03); // speech again — resets hold
+  gate.analyze(0.03); // speech again — resets hold
   gate.tick();
   assert.ok(gate.isOpen, "hold should reset");
   gate.tick();
@@ -249,7 +249,7 @@ test("noise gate: hold counter resets on repeated speech", () => {
 
 test("noise gate: tick returns true while hold active", () => {
   const gate = new AdaptiveNoiseGate({ initialThreshold: 0.01, holdFrames: 2 });
-  gate.process(0.03);
+  gate.analyze(0.03);
   assert.equal(gate.tick(), true);
   assert.equal(gate.tick(), true);
   assert.equal(gate.tick(), false);
@@ -264,7 +264,7 @@ test("noise gate: noise floor adapts upward during silence", () => {
 
   // Feed silent RMS values (below threshold)
   for (let i = 0; i < 10; i++) {
-    gate.process(0.015);
+    gate.analyze(0.015);
   }
 
   assert.ok(
@@ -273,7 +273,7 @@ test("noise gate: noise floor adapts upward during silence", () => {
   );
 });
 
-test("noise gate: noise floor decays slowly during speech", () => {
+test("noise gate: noise floor is unchanged during speech (long-meeting stability)", () => {
   const gate = new AdaptiveNoiseGate({
     initialThreshold: 0.01,
     adaptationRate: 0.5,
@@ -281,13 +281,15 @@ test("noise gate: noise floor decays slowly during speech", () => {
   const initialFloor = gate.getNoiseFloor();
 
   // Feed speech RMS values (above threshold)
-  for (let i = 0; i < 100; i++) {
-    gate.process(0.05);
+  for (let i = 0; i < 1000; i++) {
+    gate.analyze(0.05);
   }
 
-  assert.ok(
-    gate.getNoiseFloor() < initialFloor,
-    "noise floor should decay during sustained speech with no noise",
+  assert.equal(
+    gate.getNoiseFloor(),
+    initialFloor,
+    "noise floor must not decay toward zero during sustained speech — " +
+      "that would classify everything as speech over a long meeting",
   );
 });
 
@@ -316,21 +318,30 @@ test("noise gate: getNoiseFloor returns current floor", () => {
 
 test("noise gate: reset restores initial state", () => {
   const gate = new AdaptiveNoiseGate({ initialThreshold: 0.02, holdFrames: 3 });
-  gate.process(0.05); // speech
+  gate.analyze(0.05); // speech — noise floor stays unchanged by design
   gate.tick();
+
   assert.ok(gate.isOpen);
-  assert.ok(gate.getNoiseFloor() < 0.02);
+  assert.equal(
+    gate.getNoiseFloor(),
+    0.02,
+    "noise floor should remain at initialThreshold during speech",
+  );
 
   gate.reset();
 
-  assert.equal(gate.getNoiseFloor(), 0.012);
+  assert.equal(
+    gate.getNoiseFloor(),
+    0.02,
+    "reset should restore the initialThreshold from constructor options",
+  );
   assert.equal(gate.isOpen, false);
 });
 
 test("noise gate: non-finite RMS does not trigger speech", () => {
   const gate = new AdaptiveNoiseGate({ initialThreshold: 0.01 });
-  gate.process(NaN);
+  gate.analyze(NaN);
   assert.equal(gate.isOpen, false);
-  gate.process(Infinity);
+  gate.analyze(Infinity);
   assert.equal(gate.isOpen, false);
 });

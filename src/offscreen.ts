@@ -619,7 +619,7 @@ async function startCapture(
         voiceActivity.observe(rms);
 
         // Use adaptive threshold when noise gate is available
-        const adaptiveThreshold = noiseGate?.process(rms) ?? rmsThreshold;
+        const adaptiveThreshold = noiseGate?.analyze(rms) ?? rmsThreshold;
         speechActive = Number.isFinite(rms) && rms >= adaptiveThreshold;
 
         if (speechActive) {
@@ -636,15 +636,14 @@ async function startCapture(
       const gainOpen = speechActive || gateHolding;
 
       // Smoothly ramp the noise gain node to avoid audible clicks.
+      // setTargetAtTime is idempotent when the target is already reached,
+      // so we skip the guard entirely rather than carry a magic tolerance.
       if (noiseGateGainNode && audioContext) {
-        const targetGain = gainOpen ? 1 : 0;
-        if (Math.abs(noiseGateGainNode.gain.value - targetGain) > 0.01) {
-          noiseGateGainNode.gain.setTargetAtTime(
-            targetGain,
-            audioContext.currentTime,
-            NOISE_GATE_RAMP_TIME,
-          );
-        }
+        noiseGateGainNode.gain.setTargetAtTime(
+          gainOpen ? 1 : 0,
+          audioContext.currentTime,
+          NOISE_GATE_RAMP_TIME,
+        );
       }
 
       if (naturalPause || overflowReached) {

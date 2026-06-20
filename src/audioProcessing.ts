@@ -62,7 +62,7 @@ export interface NoiseGateOptions {
  *
  * @example
  *   const gate = new AdaptiveNoiseGate({ initialThreshold: 0.012 });
- *   gate.process(0.008); // returns adaptive threshold (~0.012)
+ *   gate.analyze(0.008); // returns adaptive threshold (~0.012)
  *   gate.tick();         // returns true (gate still held open)
  */
 export class AdaptiveNoiseGate {
@@ -72,35 +72,36 @@ export class AdaptiveNoiseGate {
   private readonly minThreshold: number;
   private readonly maxThreshold: number;
   private readonly holdFrames: number;
+  private readonly initialThreshold: number;
   private holdCounter: number;
-  private frameCount: number;
 
   constructor(options: NoiseGateOptions = {}) {
-    this.noiseFloor = options.initialThreshold ?? 0.012;
+    this.initialThreshold = options.initialThreshold ?? 0.012;
+    this.noiseFloor = this.initialThreshold;
     this.adaptationRate = options.adaptationRate ?? 0.01;
     this.thresholdMultiplier = options.thresholdMultiplier ?? 2.0;
     this.minThreshold = options.minThreshold ?? 0.003;
     this.maxThreshold = options.maxThreshold ?? 0.05;
     this.holdFrames = options.holdFrames ?? 2;
     this.holdCounter = 0;
-    this.frameCount = 0;
   }
 
   /**
-   * Feed an RMS sample to the estimator. The noise floor is adapted upward
-   * during silence frames and decays slowly during speech.
+   * Feed an RMS sample to the estimator and receive the current adaptive
+   * threshold. The noise floor is adapted upward during silence frames and
+   * left unchanged during speech so it cannot asymptotically drift toward
+   * zero over a long meeting.
    *
    * @returns The current adaptive threshold.
    */
-  process(rms: number): number {
-    this.frameCount++;
+  analyze(rms: number): number {
     const threshold = this.getThreshold();
     const isSpeech = Number.isFinite(rms) && rms >= threshold;
 
     if (isSpeech) {
       this.holdCounter = this.holdFrames;
-      // Slow decay during speech in case ambient noise drops
-      this.noiseFloor *= 1 - this.adaptationRate * 0.1;
+      // Noise floor is untouched during speech — it stays at the last
+      // silence estimate so it cannot decay toward zero over long meetings.
     } else {
       // Adapt noise floor toward observed RMS during silence
       this.noiseFloor += this.adaptationRate * (rms - this.noiseFloor);
@@ -138,11 +139,10 @@ export class AdaptiveNoiseGate {
     return this.noiseFloor;
   }
 
-  /** Reset the estimator to its initial state. */
+  /** Reset the estimator to its initial state (same constructor options). */
   reset(): void {
-    this.noiseFloor = 0.012;
+    this.noiseFloor = this.initialThreshold;
     this.holdCounter = 0;
-    this.frameCount = 0;
   }
 }
 
