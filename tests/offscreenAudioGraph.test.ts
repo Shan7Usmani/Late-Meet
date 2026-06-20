@@ -27,6 +27,13 @@ class MockAnalyserNode extends MockAudioNode {
   fftSize = 2048;
 }
 
+class MockGainNode extends MockAudioNode {
+  gain = { value: 1 };
+  channelCount = 2;
+  channelCountMode: ChannelCountMode = "max";
+  channelInterpretation: ChannelInterpretation = "speakers";
+}
+
 class MockMediaStreamDestinationNode extends MockAudioNode {
   readonly stream = createMockStream("recorder-output");
 }
@@ -36,6 +43,7 @@ class MockAudioContext {
   readonly analysers: MockAnalyserNode[] = [];
   readonly recorderDestinations: MockMediaStreamDestinationNode[] = [];
   readonly sources: MockSourceNode[] = [];
+  readonly gainNodes: MockGainNode[] = [];
 
   createMediaStreamDestination(): MediaStreamAudioDestinationNode {
     const destination = new MockMediaStreamDestinationNode();
@@ -49,6 +57,12 @@ class MockAudioContext {
     this.analysers.push(analyser);
 
     return analyser as unknown as AnalyserNode;
+  }
+
+  createGain(): GainNode {
+    const gain = new MockGainNode();
+    this.gainNodes.push(gain);
+    return gain as unknown as GainNode;
   }
 
   createMediaStreamSource(stream: MediaStream): MediaStreamAudioSourceNode {
@@ -93,19 +107,26 @@ test("configures the analyser with the offscreen FFT size", () => {
   assert.equal(context.analysers[0].fftSize, 1024);
 });
 
-test("routes tab audio to recorder, analyser, and playback output", () => {
+test("routes tab audio to downmix node, analyser, and playback output", () => {
   const context = new MockAudioContext();
 
   createOffscreenAudioGraph(asAudioContext(context), createMockStream("tab"));
 
-  assert.deepEqual(context.sources[0].connections, [
-    context.recorderDestinations[0],
-    context.analysers[0],
-    context.destination,
-  ]);
+  // Tab source → downmixNode (mono recorder path), analyser (raw VAD), and destination (playback)
+  assert.equal(context.sources[0].connections.length, 3);
+  assert.equal(context.sources[0].connections[0], context.gainNodes[0]);
+  assert.equal(context.sources[0].connections[1], context.analysers[0]);
+  assert.equal(context.sources[0].connections[2], context.destination);
+
+  // Downmix node → recorder destination with mono configuration
+  assert.equal(context.gainNodes[0].connections.length, 1);
+  assert.equal(context.gainNodes[0].connections[0], context.recorderDestinations[0]);
+  assert.equal(context.gainNodes[0].channelCount, 1);
+  assert.equal(context.gainNodes[0].channelCountMode, "explicit");
+  assert.equal(context.gainNodes[0].channelInterpretation, "speakers");
 });
 
-test("routes microphone audio to recorder and analyser", () => {
+test("routes microphone audio through downmix node and to analyser", () => {
   const context = new MockAudioContext();
 
   const graph = createOffscreenAudioGraph(asAudioContext(context), createMockStream("tab"));
@@ -118,10 +139,10 @@ test("routes microphone audio to recorder and analyser", () => {
 
   assert.equal(microphoneSource, context.sources[1]);
 
-  assert.deepEqual(context.sources[1].connections, [
-    context.recorderDestinations[0],
-    context.analysers[0],
-  ]);
+  // Mic source → downmixNode (mono recorder path) and analyser (raw VAD)
+  assert.equal(context.sources[1].connections.length, 2);
+  assert.equal(context.sources[1].connections[0], context.gainNodes[0]);
+  assert.equal(context.sources[1].connections[1], context.analysers[0]);
 });
 
 test("does not route microphone audio to local playback", () => {
