@@ -9,45 +9,17 @@
  */
 
 /**
- * Escapes HTML special characters in an arbitrary value to prevent XSS attacks.
+ * Escapes HTML special characters in a string to prevent XSS attacks.
  *
- * Accepts any type and converts it to a safe HTML string:
- * - `null` / `undefined` → `""`
- * - `string` → escaped as-is
- * - `number`, `boolean`, `symbol`, `bigint` → converted via `String()`
- * - objects / arrays → serialized via `JSON.stringify()`
- *
- * Internally delegates to a temporary `<div>` element so that the browser's
- * own HTML serialiser handles all edge cases (including supplementary Unicode
- * code points).
+ * @deprecated Use `escapeHtml` from `./domHelpers` instead — it has the same
+ *   contract for string values, is used by all rendering code, and works in
+ *   plain Node.js without a DOM mock. This re-export exists only to avoid
+ *   breaking existing imports during the migration.
  *
  * @param value - The raw, potentially untrusted value to escape.
- * @returns An HTML-safe string where `&`, `<`, `>`, `"`, and `'` are replaced
- *   with their corresponding HTML entities.
- *
- * @example
- * element.innerHTML = escapeHtml(userInput);
- * // '<script>alert(1)</script>' → '&lt;script&gt;alert(1)&lt;/script&gt;'
+ * @returns An HTML-safe string.
  */
-export function escapeHtml(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  let str: string;
-  if (typeof value === "string") {
-    str = value;
-  } else if (
-    typeof value === "number" ||
-    typeof value === "boolean" ||
-    typeof value === "symbol" ||
-    typeof value === "bigint"
-  ) {
-    str = String(value);
-  } else {
-    str = JSON.stringify(value);
-  }
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
+export { escapeHtml } from "./domHelpers";
 
 /**
  * Validates a class name string against an explicit allowlist to prevent
