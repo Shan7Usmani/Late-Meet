@@ -10,10 +10,16 @@ export interface OffscreenAudioGraph {
   recorderDestination: MediaStreamAudioDestinationNode;
   analyser: AnalyserNode;
   tabSource: MediaStreamAudioSourceNode;
+  downmixNode: GainNode;
 }
 
 /**
  * Connects a media stream to the shared recorder and analyser nodes.
+ *
+ * The recorder path is routed through a stereo-to-mono downmix node so the
+ * MediaRecorder produces mono audio (sufficient for STT, saves ~50%
+ * bandwidth/storage).  The analyser and playback destinations always receive
+ * the raw (stereo) signal so VAD/waveform are unaffected.
  *
  * Only the tab stream receives a playback destination. The microphone must
  * never be routed to AudioContext.destination because that would create local
@@ -22,13 +28,16 @@ export interface OffscreenAudioGraph {
 function connectCaptureSource(
   context: AudioContext,
   stream: MediaStream,
-  recorderDestination: MediaStreamAudioDestinationNode,
+  downmixNode: GainNode,
   analyser: AnalyserNode,
   playbackDestination?: AudioDestinationNode,
 ): MediaStreamAudioSourceNode {
   const source = context.createMediaStreamSource(stream);
 
-  source.connect(recorderDestination);
+  // Downmix path → recorder (stereo → mono)
+  source.connect(downmixNode);
+
+  // Ungated path → analyser (VAD & waveform need raw signal)
   source.connect(analyser);
 
   if (playbackDestination) {
@@ -47,13 +56,18 @@ export function createOffscreenAudioGraph(
 ): OffscreenAudioGraph {
   const recorderDestination = context.createMediaStreamDestination();
   const analyser = context.createAnalyser();
+  const downmixNode = context.createGain();
 
   analyser.fftSize = OFFSCREEN_ANALYSER_FFT_SIZE;
+  downmixNode.channelCount = 1;
+  downmixNode.channelCountMode = "explicit";
+  downmixNode.channelInterpretation = "speakers";
+  downmixNode.connect(recorderDestination);
 
   const tabSource = connectCaptureSource(
     context,
     tabStream,
-    recorderDestination,
+    downmixNode,
     analyser,
     context.destination,
   );
@@ -62,6 +76,7 @@ export function createOffscreenAudioGraph(
     recorderDestination,
     analyser,
     tabSource,
+    downmixNode,
   };
 }
 
@@ -74,7 +89,7 @@ export function createOffscreenAudioGraph(
 export function connectMicrophoneToOffscreenAudioGraph(
   context: AudioContext,
   microphoneStream: MediaStream,
-  graph: Pick<OffscreenAudioGraph, "recorderDestination" | "analyser">,
+  graph: Pick<OffscreenAudioGraph, "analyser" | "downmixNode">,
 ): MediaStreamAudioSourceNode {
-  return connectCaptureSource(context, microphoneStream, graph.recorderDestination, graph.analyser);
+  return connectCaptureSource(context, microphoneStream, graph.downmixNode, graph.analyser);
 }
