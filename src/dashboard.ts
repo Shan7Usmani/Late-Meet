@@ -571,6 +571,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const trackerCard = document.getElementById("live-tracker-card");
     const liveTokensEl = document.getElementById("live-tokens");
     const liveCostEl = document.getElementById("live-cost");
+    const promptWarningEl = document.getElementById("prompt-token-warning");
     if (trackerCard) {
       if (state.isActive) {
         trackerCard.style.display = "";
@@ -579,6 +580,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else {
         trackerCard.style.display = "none";
       }
+    }
+    if (promptWarningEl) {
+      promptWarningEl.style.display = state.promptTokenWarning ? "flex" : "none";
     }
   }
 

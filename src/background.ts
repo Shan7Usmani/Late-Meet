@@ -1,6 +1,6 @@
 // MV3 service worker for Late Meet
 
-import { State } from "./types";
+import { State, TranscriptEntry } from "./types";
 import { audioFileExtensionForMimeType, isChunkViable } from "./audioProcessing";
 import {
   deleteSavedMeetingSession,
@@ -24,6 +24,7 @@ import { namesMatch, findParticipant, normalizeName } from "./utils/nameUtils";
 import { getTabState, setTabState, clearTabState, initTabStateCleanup } from "./tabStateManager";
 import {
   BROADCAST_THROTTLE_MS,
+  CHARS_PER_TOKEN,
   DEBUG,
   DEFAULT_CHAT_MODEL,
   ELEVENLABS_STT_MODEL,
@@ -31,7 +32,10 @@ import {
   MAX_PENDING_AUDIO_CHUNKS,
   MAX_PROMPT_LENGTH,
   MIN_MEETING_DURATION_FOR_WELCOME,
+  MODEL_CONTEXT_LIMITS,
+  PROMPT_SAFETY_BUFFER,
   SUMMARIZATION_MAX_TOKENS,
+  TOKEN_WARNING_RATIO,
   TRANSCRIPT_WINDOW_SIZE,
   WHISPER_MODEL,
 } from "./config";
@@ -397,6 +401,8 @@ async function hydrateState() {
             state.participantCount = stored.participantCount;
           if (typeof stored.tokensUsed === "number") state.tokensUsed = stored.tokensUsed;
           if (typeof stored.estimatedCost === "number") state.estimatedCost = stored.estimatedCost;
+          if (typeof stored.promptTokenWarning === "boolean")
+            state.promptTokenWarning = stored.promptTokenWarning;
         }
 
         // Restore guard flags alongside state
@@ -1056,6 +1062,63 @@ function mergeUniqueStrings(existing: string[], incoming: unknown, maxSize = 500
   ).slice(-maxSize);
 }
 
+// ---------------------------------------------------------------------------
+// Token estimation and prompt truncation
+// ---------------------------------------------------------------------------
+
+export function estimateTokens(text: string): number {
+  return Math.ceil(text.length / CHARS_PER_TOKEN);
+}
+
+export function getModelContextLimit(model: string): number {
+  return MODEL_CONTEXT_LIMITS[model] ?? 128_000;
+}
+
+export function truncateTranscriptWindow(
+  entries: TranscriptEntry[],
+  maxPromptTokens: number,
+  systemPrompt: string,
+  prevSummary: string,
+): { entries: TranscriptEntry[]; formatted: string; estimatedTokens: number } {
+  if (!entries.length) return { entries: [], formatted: "", estimatedTokens: 0 };
+
+  let low = 0;
+  let high = entries.length;
+  let bestFormatted = "";
+
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    const candidate = entries.slice(-mid);
+    const formatted = formatTranscriptLines(candidate);
+    const userText = `<previous_context>\n${prevSummary || "Initial session"}\n</previous_context>\n\n<recent_transcript>\n${formatted}\n</recent_transcript>`;
+    const totalTokens = estimateTokens(systemPrompt) + estimateTokens(userText);
+
+    if (totalTokens <= maxPromptTokens) {
+      low = mid;
+      bestFormatted = formatted;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  const finalEntries = entries.slice(-low);
+  const formatted = low > 0 ? bestFormatted : "";
+  const userText = `<previous_context>\n${prevSummary || "Initial session"}\n</previous_context>\n\n<recent_transcript>\n${formatted}\n</recent_transcript>`;
+  const estimatedTokens = estimateTokens(systemPrompt) + estimateTokens(userText);
+
+  return { entries: finalEntries, formatted, estimatedTokens };
+}
+
+export function formatTranscriptLines(entries: TranscriptEntry[]): string {
+  return entries
+    .map((e) => {
+      const chunkId = e.id || "unknown_chunk";
+      const ts = e.timestampLabel || formatTimestampLabel(Math.floor(e.timestamp || 0));
+      return `[${chunkId}] [${ts}] ${sanitizePromptText(e.speaker)}: ${sanitizePromptText(e.text)}`;
+    })
+    .join("\n");
+}
+
 async function summarizeTranscriptIfNeeded() {
   if (!state.isActive || state.transcript.length === 0) return;
 
@@ -1075,16 +1138,6 @@ async function summarizeTranscriptIfNeeded() {
 
   const apiKey = await getApiKey();
   if (!apiKey) return;
-
-  const transcriptWindow = state.transcript
-    .slice(-TRANSCRIPT_WINDOW_SIZE)
-    .map((e) => {
-      const chunkId = e.id || "unknown_chunk";
-      const timestampLabel = e.timestampLabel || formatTimestampLabel(Math.floor(e.timestamp || 0));
-      return `[${chunkId}] [${timestampLabel}] ${sanitizePromptText(e.speaker)}: ${sanitizePromptText(e.text)}`;
-    })
-    .join("\n");
-  if (!transcriptWindow.trim()) return;
 
   // Claim the in-flight slot *after* all cheap pre-checks pass.
   summaryInFlight = true;
@@ -1140,6 +1193,34 @@ ${sentimentAnalysisEnabled ? "- Detect the prevailing sentiment and emotional dy
 - Track specific questions raised that remain unanswered.
 
 You must return ONLY a JSON object.`;
+
+    // --- Token-aware transcript window ---
+    const model = settings.aiModel || DEFAULT_CHAT_MODEL;
+    const contextLimit = getModelContextLimit(model);
+    const maxPromptTokens = contextLimit - PROMPT_SAFETY_BUFFER;
+
+    // Use a generous window; let truncateTranscriptWindow do the real work.
+    const maxWindow = Math.max(TRANSCRIPT_WINDOW_SIZE, 500);
+    const windowStart = Math.max(0, state.transcript.length - maxWindow);
+    const candidateEntries = state.transcript.slice(windowStart);
+    const truncated = truncateTranscriptWindow(
+      candidateEntries,
+      maxPromptTokens,
+      systemPrompt,
+      state.summary || "Initial session",
+    );
+    const transcriptEntries = truncated.entries;
+    const transcriptWindow = truncated.formatted;
+    const estimatedTokens = truncated.estimatedTokens;
+
+    if (!transcriptEntries.length) return;
+
+    const warningThreshold = Math.floor(contextLimit * TOKEN_WARNING_RATIO);
+    const showWarning = estimatedTokens > warningThreshold;
+    if (showWarning !== state.promptTokenWarning) {
+      state.promptTokenWarning = showWarning;
+      await broadcastStateUpdate().catch(() => {});
+    }
 
     const userPrompt = `Analyze the following meeting transcript segment.
 Integrate this new data with the previous context.
