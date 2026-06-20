@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  AdaptiveNoiseGate,
   VoiceActivityTracker,
   audioFileExtensionForMimeType,
   isChunkViable,
@@ -202,4 +203,134 @@ test("custom minimum chunk size is respected", () => {
     true,
     "custom minimum size must override the default threshold",
   );
+});
+
+// ─── Adaptive noise gate ─────────────────────────────────────────────────────
+
+test("noise gate: initial threshold matches constructor arg", () => {
+  const gate = new AdaptiveNoiseGate({ initialThreshold: 0.02 });
+  assert.equal(gate.getThreshold(), 0.04); // 0.02 * 2.0
+});
+
+test("noise gate: default initial threshold", () => {
+  const gate = new AdaptiveNoiseGate();
+  assert.equal(gate.getThreshold(), 0.024); // 0.012 * 2.0
+});
+
+test("noise gate: process returns current threshold", () => {
+  const gate = new AdaptiveNoiseGate({ initialThreshold: 0.01 });
+  const threshold = gate.process(0.005);
+  assert.equal(threshold, 0.02);
+});
+
+test("noise gate: speech keeps gate open via hold counter", () => {
+  const gate = new AdaptiveNoiseGate({ initialThreshold: 0.01, holdFrames: 3 });
+  gate.process(0.03); // speech (above 0.02 threshold)
+  assert.ok(gate.isOpen, "gate should open after speech");
+  gate.tick();
+  assert.ok(gate.isOpen, "gate should stay open after 1 tick");
+  gate.tick();
+  assert.ok(gate.isOpen, "gate should stay open after 2 ticks");
+  gate.tick();
+  assert.equal(gate.isOpen, false, "gate should close after hold expires");
+});
+
+test("noise gate: hold counter resets on repeated speech", () => {
+  const gate = new AdaptiveNoiseGate({ initialThreshold: 0.01, holdFrames: 2 });
+  gate.process(0.03); // speech
+  gate.tick();
+  assert.ok(gate.isOpen);
+  gate.process(0.03); // speech again — resets hold
+  gate.tick();
+  assert.ok(gate.isOpen, "hold should reset");
+  gate.tick();
+  assert.equal(gate.isOpen, false);
+});
+
+test("noise gate: tick returns true while hold active", () => {
+  const gate = new AdaptiveNoiseGate({ initialThreshold: 0.01, holdFrames: 2 });
+  gate.process(0.03);
+  assert.equal(gate.tick(), true);
+  assert.equal(gate.tick(), true);
+  assert.equal(gate.tick(), false);
+});
+
+test("noise gate: noise floor adapts upward during silence", () => {
+  const gate = new AdaptiveNoiseGate({
+    initialThreshold: 0.01,
+    adaptationRate: 0.5,
+  });
+  const initialFloor = gate.getNoiseFloor();
+
+  // Feed silent RMS values (below threshold)
+  for (let i = 0; i < 10; i++) {
+    gate.process(0.015);
+  }
+
+  assert.ok(
+    gate.getNoiseFloor() > initialFloor,
+    "noise floor should rise during sustained silence at a higher RMS",
+  );
+});
+
+test("noise gate: noise floor decays slowly during speech", () => {
+  const gate = new AdaptiveNoiseGate({
+    initialThreshold: 0.01,
+    adaptationRate: 0.5,
+  });
+  const initialFloor = gate.getNoiseFloor();
+
+  // Feed speech RMS values (above threshold)
+  for (let i = 0; i < 100; i++) {
+    gate.process(0.05);
+  }
+
+  assert.ok(
+    gate.getNoiseFloor() < initialFloor,
+    "noise floor should decay during sustained speech with no noise",
+  );
+});
+
+test("noise gate: threshold clamped to min", () => {
+  const gate = new AdaptiveNoiseGate({
+    initialThreshold: 0.001,
+    minThreshold: 0.005,
+    thresholdMultiplier: 1.0,
+  });
+  assert.equal(gate.getThreshold(), 0.005);
+});
+
+test("noise gate: threshold clamped to max", () => {
+  const gate = new AdaptiveNoiseGate({
+    initialThreshold: 0.1,
+    maxThreshold: 0.05,
+    thresholdMultiplier: 1.0,
+  });
+  assert.equal(gate.getThreshold(), 0.05);
+});
+
+test("noise gate: getNoiseFloor returns current floor", () => {
+  const gate = new AdaptiveNoiseGate({ initialThreshold: 0.015 });
+  assert.equal(gate.getNoiseFloor(), 0.015);
+});
+
+test("noise gate: reset restores initial state", () => {
+  const gate = new AdaptiveNoiseGate({ initialThreshold: 0.02, holdFrames: 3 });
+  gate.process(0.05); // speech
+  gate.tick();
+  assert.ok(gate.isOpen);
+  assert.ok(gate.getNoiseFloor() < 0.02);
+
+  gate.reset();
+
+  assert.equal(gate.getNoiseFloor(), 0.012);
+  assert.equal(gate.isOpen, false);
+});
+
+test("noise gate: non-finite RMS does not trigger speech", () => {
+  const gate = new AdaptiveNoiseGate({ initialThreshold: 0.01 });
+  gate.process(NaN);
+  assert.equal(gate.isOpen, false);
+  gate.process(Infinity);
+  assert.equal(gate.isOpen, false);
 });

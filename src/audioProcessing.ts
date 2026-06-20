@@ -35,6 +35,122 @@ export class VoiceActivityTracker {
 }
 
 /**
+ * @description Options for configuring the AdaptiveNoiseGate
+ * @property {number} initialThreshold - Starting noise floor estimate (default 0.012)
+ * @property {number} adaptationRate - How fast the noise floor adapts during silence (0-1, default 0.01)
+ * @property {number} thresholdMultiplier - Multiplier from noise floor to gate threshold (default 2.0)
+ * @property {number} minThreshold - Minimum gate threshold (default 0.003)
+ * @property {number} maxThreshold - Maximum gate threshold (default 0.05)
+ * @property {number} holdFrames - Frames to keep gate open after last speech frame (default 2)
+ */
+export interface NoiseGateOptions {
+  initialThreshold?: number;
+  adaptationRate?: number;
+  thresholdMultiplier?: number;
+  minThreshold?: number;
+  maxThreshold?: number;
+  holdFrames?: number;
+}
+
+/**
+ * @description Dynamically estimates the background noise floor from incoming RMS
+ * samples and computes an adaptive gate threshold. During silence the noise floor
+ * slowly tracks the observed RMS; during speech it decays very gradually so the
+ * gate stays responsive when ambient noise drops.
+ *
+ * A hold counter prevents the gate from chattering during short inter-word pauses.
+ *
+ * @example
+ *   const gate = new AdaptiveNoiseGate({ initialThreshold: 0.012 });
+ *   gate.process(0.008); // returns adaptive threshold (~0.012)
+ *   gate.tick();         // returns true (gate still held open)
+ */
+export class AdaptiveNoiseGate {
+  private noiseFloor: number;
+  private readonly adaptationRate: number;
+  private readonly thresholdMultiplier: number;
+  private readonly minThreshold: number;
+  private readonly maxThreshold: number;
+  private readonly holdFrames: number;
+  private holdCounter: number;
+  private frameCount: number;
+
+  constructor(options: NoiseGateOptions = {}) {
+    this.noiseFloor = options.initialThreshold ?? 0.012;
+    this.adaptationRate = options.adaptationRate ?? 0.01;
+    this.thresholdMultiplier = options.thresholdMultiplier ?? 2.0;
+    this.minThreshold = options.minThreshold ?? 0.003;
+    this.maxThreshold = options.maxThreshold ?? 0.05;
+    this.holdFrames = options.holdFrames ?? 2;
+    this.holdCounter = 0;
+    this.frameCount = 0;
+  }
+
+  /**
+   * Feed an RMS sample to the estimator. The noise floor is adapted upward
+   * during silence frames and decays slowly during speech.
+   *
+   * @returns The current adaptive threshold.
+   */
+  process(rms: number): number {
+    this.frameCount++;
+    const threshold = this.getThreshold();
+    const isSpeech = Number.isFinite(rms) && rms >= threshold;
+
+    if (isSpeech) {
+      this.holdCounter = this.holdFrames;
+      // Slow decay during speech in case ambient noise drops
+      this.noiseFloor *= 1 - this.adaptationRate * 0.1;
+    } else {
+      // Adapt noise floor toward observed RMS during silence
+      this.noiseFloor += this.adaptationRate * (rms - this.noiseFloor);
+    }
+
+    return threshold;
+  }
+
+  /**
+   * Decrement the hold counter by one frame. Call this on every VAD tick
+   * (even when analysis is throttled) so the hold timer progresses correctly.
+   *
+   * @returns True while the gate should remain open (hold active).
+   */
+  tick(): boolean {
+    if (this.holdCounter > 0) {
+      this.holdCounter--;
+      return true;
+    }
+    return false;
+  }
+
+  /** Whether the gate is currently held open after recent speech. */
+  get isOpen(): boolean {
+    return this.holdCounter > 0;
+  }
+
+  /** Returns the current adaptive gate threshold. */
+  getThreshold(): number {
+    return clamp(this.noiseFloor * this.thresholdMultiplier, this.minThreshold, this.maxThreshold);
+  }
+
+  /** Returns the estimated noise floor. */
+  getNoiseFloor(): number {
+    return this.noiseFloor;
+  }
+
+  /** Reset the estimator to its initial state. */
+  reset(): void {
+    this.noiseFloor = 0.012;
+    this.holdCounter = 0;
+    this.frameCount = 0;
+  }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+/**
  * @description Determines the appropriate file extension for an audio MIME type
  * @param {string} mimeType - The MIME type of the audio (e.g., "audio/webm", "audio/mp3")
  * @returns {string} The file extension without the dot (e.g., "webm", "mp3", "ogg")

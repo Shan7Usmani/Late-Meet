@@ -24,7 +24,27 @@ export const SUMMARIZATION_MAX_TOKENS = 1200;
 export const JOINER_MESSAGE_MAX_TOKENS = 120;
 
 // Audio Pipeline
-/** Maximum number of audio chunks that may be queued for processing before back-pressure is applied. */
+/** Default RMS threshold for voice activity detection when no adaptive noise gate is used. */
+export const DEFAULT_VAD_THRESHOLD = 0.012;
+
+/** How fast the adaptive noise gate's noise floor tracks during silence (0-1). */
+export const NOISE_GATE_ADAPTATION_RATE = 0.01;
+
+/** Multiplier applied to the noise floor to derive the gate threshold. */
+export const NOISE_GATE_THRESHOLD_MULTIPLIER = 2.0;
+
+/** Minimum gate threshold to prevent the gate from staying wide open. */
+export const NOISE_GATE_MIN_THRESHOLD = 0.003;
+
+/** Maximum gate threshold to prevent the gate from silencing normal speech. */
+export const NOISE_GATE_MAX_THRESHOLD = 0.05;
+
+/** Number of VAD frames the gate stays open after the last speech frame. */
+export const NOISE_GATE_HOLD_FRAMES = 2;
+
+/** Time constant (seconds) for gain ramp smoothing when the gate opens/closes. */
+export const NOISE_GATE_RAMP_TIME = 0.01;
+
 export const MAX_PENDING_AUDIO_CHUNKS = 8;
 
 /** Interval in milliseconds at which voice-activity detection (VAD) samples audio energy. */

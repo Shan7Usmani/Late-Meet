@@ -10,25 +10,33 @@ export interface OffscreenAudioGraph {
   recorderDestination: MediaStreamAudioDestinationNode;
   analyser: AnalyserNode;
   tabSource: MediaStreamAudioSourceNode;
+  noiseGateGain: GainNode;
 }
 
 /**
  * Connects a media stream to the shared recorder and analyser nodes.
  *
- * Only the tab stream receives a playback destination. The microphone must
- * never be routed to AudioContext.destination because that would create local
- * monitoring and potentially audible feedback.
+ * The recorder path is routed through the noise gate gain node so the
+ * adaptive noise gate can attenuate silent passages before they reach
+ * the MediaRecorder.  The analyser and playback destinations always
+ * receive the raw (ungated) signal so VAD and waveform rendering are
+ * unaffected by the gate state.
  */
 function connectCaptureSource(
   context: AudioContext,
   stream: MediaStream,
   recorderDestination: MediaStreamAudioDestinationNode,
   analyser: AnalyserNode,
+  noiseGateGain: GainNode,
   playbackDestination?: AudioDestinationNode,
 ): MediaStreamAudioSourceNode {
   const source = context.createMediaStreamSource(stream);
 
-  source.connect(recorderDestination);
+  // Gated path → recorder (noise gate can mute silent passages)
+  source.connect(noiseGateGain);
+  noiseGateGain.connect(recorderDestination);
+
+  // Ungated path → analyser (VAD & waveform need raw signal)
   source.connect(analyser);
 
   if (playbackDestination) {
@@ -47,14 +55,17 @@ export function createOffscreenAudioGraph(
 ): OffscreenAudioGraph {
   const recorderDestination = context.createMediaStreamDestination();
   const analyser = context.createAnalyser();
+  const noiseGateGain = context.createGain();
 
   analyser.fftSize = OFFSCREEN_ANALYSER_FFT_SIZE;
+  noiseGateGain.gain.value = 1; // start with gate fully open
 
   const tabSource = connectCaptureSource(
     context,
     tabStream,
     recorderDestination,
     analyser,
+    noiseGateGain,
     context.destination,
   );
 
@@ -62,6 +73,7 @@ export function createOffscreenAudioGraph(
     recorderDestination,
     analyser,
     tabSource,
+    noiseGateGain,
   };
 }
 
@@ -74,7 +86,13 @@ export function createOffscreenAudioGraph(
 export function connectMicrophoneToOffscreenAudioGraph(
   context: AudioContext,
   microphoneStream: MediaStream,
-  graph: Pick<OffscreenAudioGraph, "recorderDestination" | "analyser">,
+  graph: Pick<OffscreenAudioGraph, "recorderDestination" | "analyser" | "noiseGateGain">,
 ): MediaStreamAudioSourceNode {
-  return connectCaptureSource(context, microphoneStream, graph.recorderDestination, graph.analyser);
+  return connectCaptureSource(
+    context,
+    microphoneStream,
+    graph.recorderDestination,
+    graph.analyser,
+    graph.noiseGateGain,
+  );
 }

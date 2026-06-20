@@ -1,9 +1,15 @@
-import { VoiceActivityTracker, isChunkViable } from "./audioProcessing";
+import { AdaptiveNoiseGate, VoiceActivityTracker, isChunkViable } from "./audioProcessing";
 import { computeRms, shouldRunVadAnalysis } from "./vadTuning";
 import {
   DRAIN_TIMEOUT_MS,
   MAX_BUFFER_MS,
   MAX_PENDING_CHUNKS,
+  NOISE_GATE_ADAPTATION_RATE,
+  NOISE_GATE_HOLD_FRAMES,
+  NOISE_GATE_MAX_THRESHOLD,
+  NOISE_GATE_MIN_THRESHOLD,
+  NOISE_GATE_RAMP_TIME,
+  NOISE_GATE_THRESHOLD_MULTIPLIER,
   SILENCE_FLUSH_MS,
   VAD_SAMPLE_MS,
   WAVEFORM_BUCKETS,
@@ -22,9 +28,12 @@ let recorderStream: MediaStream | null = null;
 let mediaRecorder: MediaRecorder | null = null;
 let audioContext: AudioContext | null = null;
 let analyserNode: AnalyserNode | null = null;
+let noiseGateGainNode: GainNode | null = null;
 let vadTimer: ReturnType<typeof setInterval> | null = null;
 let waveformTimer: ReturnType<typeof setInterval> | null = null;
 let audioSources: MediaStreamAudioSourceNode[] = [];
+
+let noiseGate: AdaptiveNoiseGate | null = null;
 
 let pendingChunks: Blob[] = [];
 let isStopping = false;
@@ -311,6 +320,7 @@ async function cleanupResources() {
 
   mediaRecorder = null;
   analyserNode = null;
+  noiseGateGainNode = null;
   analysisBuffer = null;
   audioSources = [];
   pendingChunks = [];
@@ -320,6 +330,9 @@ async function cleanupResources() {
   speechActive = false;
   vadTickCounter = 0;
   bufferStartTime = 0;
+
+  noiseGate?.reset();
+  noiseGate = null;
 
   voiceActivity = new VoiceActivityTracker({
     rmsThreshold: rmsThreshold,
@@ -529,6 +542,7 @@ async function startCapture(
   const destination = audioGraph.recorderDestination;
 
   analyserNode = audioGraph.analyser;
+  noiseGateGainNode = audioGraph.noiseGateGain;
   audioSources.push(audioGraph.tabSource);
 
   if (includeMicrophone) {
@@ -569,6 +583,15 @@ async function startCapture(
     rmsThreshold: rmsThreshold,
   });
 
+  noiseGate = new AdaptiveNoiseGate({
+    initialThreshold: rmsThreshold,
+    adaptationRate: NOISE_GATE_ADAPTATION_RATE,
+    thresholdMultiplier: NOISE_GATE_THRESHOLD_MULTIPLIER,
+    minThreshold: NOISE_GATE_MIN_THRESHOLD,
+    maxThreshold: NOISE_GATE_MAX_THRESHOLD,
+    holdFrames: NOISE_GATE_HOLD_FRAMES,
+  });
+
   silenceTicks = 0;
   speechActive = false;
   vadTickCounter = 0;
@@ -594,13 +617,34 @@ async function startCapture(
       if (runAnalysis) {
         rms = getCurrentRms();
         voiceActivity.observe(rms);
-        speechActive = rms >= rmsThreshold;
+
+        // Use adaptive threshold when noise gate is available
+        const adaptiveThreshold = noiseGate?.process(rms) ?? rmsThreshold;
+        speechActive = Number.isFinite(rms) && rms >= adaptiveThreshold;
+
         if (speechActive) {
           silenceTicks = 0;
         } else {
           silenceTicks++;
         }
         naturalPause = silenceTicks >= SILENCE_FLUSH_TICKS;
+      }
+
+      // Tick the noise gate hold counter on every VAD cycle so the gate
+      // decays correctly even during analysis-throttled ticks.
+      const gateHolding = noiseGate?.tick() ?? false;
+      const gainOpen = speechActive || gateHolding;
+
+      // Smoothly ramp the noise gain node to avoid audible clicks.
+      if (noiseGateGainNode && audioContext) {
+        const targetGain = gainOpen ? 1 : 0;
+        if (Math.abs(noiseGateGainNode.gain.value - targetGain) > 0.01) {
+          noiseGateGainNode.gain.setTargetAtTime(
+            targetGain,
+            audioContext.currentTime,
+            NOISE_GATE_RAMP_TIME,
+          );
+        }
       }
 
       if (naturalPause || overflowReached) {
