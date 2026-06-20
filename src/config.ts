@@ -23,6 +23,26 @@ export const SUMMARIZATION_MAX_TOKENS = 1200;
 /** Maximum number of tokens the AI may generate for a late-joiner briefing message. */
 export const JOINER_MESSAGE_MAX_TOKENS = 120;
 
+/** Approximate characters-per-token ratio used for client-side token estimation. */
+export const CHARS_PER_TOKEN = 4;
+
+/** Tokens reserved for system prompt, formatting overhead, and completion output. */
+export const PROMPT_SAFETY_BUFFER = SUMMARIZATION_MAX_TOKENS + 1500;
+
+/** Fraction of context window at which a warning is shown to the user. */
+export const TOKEN_WARNING_RATIO = 0.85;
+
+/** Known model context window sizes (in tokens). Unknown models default to 128K. */
+export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
+  "gpt-4o-mini": 128_000,
+  "gpt-4o": 128_000,
+  "gpt-4-turbo": 128_000,
+  "gpt-4": 8_192,
+  "gpt-3.5-turbo": 16_385,
+  "o1-mini": 128_000,
+  "o1-preview": 128_000,
+};
+
 // Audio Pipeline
 /** Maximum number of audio chunks that may be queued for processing before back-pressure is applied. */
 export const MAX_PENDING_AUDIO_CHUNKS = 8;

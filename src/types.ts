@@ -101,6 +101,8 @@ export interface State {
   truncatedCounts?: Record<string, number>;
   tokensUsed?: number;
   estimatedCost?: number;
+  /** True when the prompt is approaching the model's token context limit. */
+  promptTokenWarning?: boolean;
 }
 
 /** Storage metadata summary for a single saved meeting, used in storage usage reports. */
