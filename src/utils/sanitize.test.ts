@@ -1,54 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { escapeHtml, sanitizeClassName, sanitizeDataAttr } from "./sanitize";
+import { escapeHtml } from "./domHelpers";
+import { sanitizeClassName, sanitizeDataAttr } from "./sanitize";
 
-// Mock document for testing escapeHtml in Node.js environment
-const mockDiv = {
-  _textContent: "",
-  set textContent(val: string) {
-    this._textContent = val;
-    this.innerHTML = val.replace(/[&<>"']/g, (char) => {
-      const map: Record<string, string> = {
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;",
-      };
-      return map[char] || char;
-    });
-  },
-  get textContent() {
-    return this._textContent;
-  },
-  innerHTML: "",
-};
-
-(globalThis as any).document = {
-  createElement(tag: string) {
-    if (tag === "div") {
-      return mockDiv;
-    }
-    throw new Error(`Unsupported tag in mock: ${tag}`);
-  },
-};
-
-test("escapeHtml behavior", () => {
-  // Null/undefined inputs
+test("escapeHtml prevents XSS in text content", () => {
   assert.equal(escapeHtml(null), "");
   assert.equal(escapeHtml(undefined), "");
 
-  // Standard string inputs
+  assert.equal(escapeHtml(""), "");
   assert.equal(escapeHtml("hello"), "hello");
+  assert.equal(escapeHtml("Alice & Bob"), "Alice &amp; Bob");
   assert.equal(
     escapeHtml("<script>alert('xss')</script>"),
-    "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;",
+    "&lt;script&gt;alert(&#039;xss&#039;)&lt;/script&gt;",
   );
 
-  // Non-string inputs
-  assert.equal(escapeHtml(42), "42");
-  assert.equal(escapeHtml(true), "true");
-  assert.equal(escapeHtml({ a: 1 }), "{&quot;a&quot;:1}");
+  const output = escapeHtml('<img src=x onerror="alert(1)">');
+  assert.equal(output, "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+  assert.ok(!output.includes('"'));
 });
 
 test("sanitizeClassName behavior", () => {

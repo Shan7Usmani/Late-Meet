@@ -20,7 +20,7 @@ initTheme();
 
 function truncatedNoticeHtml(key: string, total: number | undefined): string {
   if (total === undefined || total <= UI_TRUNCATION_MAX) return "";
-  return `<div class="truncated-notice">Showing last ${UI_TRUNCATION_MAX} of ${total} ${key}</div>`;
+  return `<div class="truncated-notice">Showing last ${UI_TRUNCATION_MAX} of ${total} ${escapeHtml(key)}</div>`;
 }
 
 function truncatedNoticeText(key: string, total: number | undefined): string {
@@ -1075,14 +1075,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   function createTranscriptEntryHTML(entry: TranscriptEntry): string {
     const timeStr = escapeHtml(entry.timestampLabel || formatDuration(entry.timestamp || 0));
     const speaker = escapeHtml(entry.speaker || "Unknown");
-    const initials = (entry.speaker || "Unknown")
+    const initials = speaker
       .split(" ")
       .filter(Boolean)
       .map((w) => w[0])
       .join("")
       .toUpperCase()
       .slice(0, 2);
-    const isAudio = (entry.speaker || "") === "Audio";
+    // speaker is already escapeHtml'd above, and "Audio" is pure ASCII
+    // so the comparison is safe (escapeHtml is a no-op for plain ASCII).
+    const isAudio = speaker === "Audio";
     const text = escapeHtml(entry.text || "");
     const chunkId = entry.id ? `transcript-${escapeHtml(entry.id)}` : "";
 
@@ -1095,9 +1097,9 @@ document.addEventListener("DOMContentLoaded", async () => {
           <div class="transcript-text">${text}</div>
         </div>
         <button type="button" class="copy-transcript-btn" 
-                data-speaker="${speaker}" 
-                data-time="${timeStr}" 
-                data-message="${text}" 
+                data-speaker="${sanitizeDataAttr(speaker)}" 
+                data-time="${sanitizeDataAttr(timeStr)}" 
+                data-message="${sanitizeDataAttr(text)}" 
                 title="Copy message to clipboard" 
                 aria-label="Copy message to clipboard">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
@@ -2113,7 +2115,7 @@ function getEmptyStateHTML(message: string, isList: boolean = false): string {
           <line x1="12" x2="12" y1="19" y2="22"></line>
         </svg>
       </div>
-      <div class="empty-state-title">${message}</div>
+      <div class="empty-state-title">${escapeHtml(message)}</div>
     </${tag}>
   `;
 }
