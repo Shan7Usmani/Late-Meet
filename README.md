@@ -984,33 +984,39 @@ _Made with 🖤 by the Late Meet community · [Report Bug](https://github.com/sh
 If you encounter issues while setting up or running **Late-Meet**, check the common scenarios below before opening a new issue.
 
 ### 1. Tab Capture & Audio Failures
-* **Symptom:** The extension states it is active, but audio isn't being captured or transcribed.
-* **Fix:** 
-  * Click the lock icon in the Chrome address bar and ensure **Microphone** permission is set to **Allow**.
-  * Ensure you have granted the active tab permission when prompted by Chrome.
-  * Check if you have other aggressive audio-routing or volume-boosting extensions active, as they can conflict with Chrome's `tabCapture` API. Try disabling them temporarily.
+
+- **Symptom:** The extension states it is active, but audio isn't being captured or transcribed.
+- **Fix:**
+  - Click the lock icon in the Chrome address bar and ensure **Microphone** permission is set to **Allow**.
+  - Ensure you have granted the active tab permission when prompted by Chrome.
+  - Check if you have other aggressive audio-routing or volume-boosting extensions active, as they can conflict with Chrome's `tabCapture` API. Try disabling them temporarily.
 
 ### 2. Invalid API Key Errors (`401 Unauthorized`)
-* **Symptom:** Summaries or transcriptions fail to generate, or extension shows API key errors.
-* **Fix:**
-  * Open the extension **Options** and re-enter your **OpenAI** and **ElevenLabs** API keys. Ensure there are no accidental spaces at the beginning or end of the text strings.
-  * Log into your OpenAI / ElevenLabs dashboards to verify that your account has a remaining usage quota/credits.
+
+- **Symptom:** Summaries or transcriptions fail to generate, or extension shows API key errors.
+- **Fix:**
+  - Open the extension **Options** and re-enter your **OpenAI** and **ElevenLabs** API keys. Ensure there are no accidental spaces at the beginning or end of the text strings.
+  - Log into your OpenAI / ElevenLabs dashboards to verify that your account has a remaining usage quota/credits.
 
 ### 3. Extension Shows "Not in a meeting"
-* **Symptom:** The popup dashboard does not recognize the session.
-* **Fix:** Late-Meet tracks native active sessions. Navigate to `meet.google.com` and click **Start Copilot** *after* joining the Meet call—not before.
+
+- **Symptom:** The popup dashboard does not recognize the session.
+- **Fix:** Late-Meet tracks native active sessions. Navigate to `meet.google.com` and click **Start Copilot** _after_ joining the Meet call—not before.
 
 ### 4. Changes Don't Reflect (For Contributors)
-* **Symptom:** You updated the source code files, but the extension behaves exactly the same way in the browser.
-* **Fix:**
-  * Go to `chrome://extensions/` in your browser.
-  * Find the **Late-Meet** card.
-  * Click the **Reload (🔄)** icon in the bottom right corner of the card to clear the old build cache and apply your latest updates.
+
+- **Symptom:** You updated the source code files, but the extension behaves exactly the same way in the browser.
+- **Fix:**
+  - Go to `chrome://extensions/` in your browser.
+  - Find the **Late-Meet** card.
+  - Click the **Reload (🔄)** icon in the bottom right corner of the card to clear the old build cache and apply your latest updates.
 
 ### 5. How to Inspect Extension Error Logs
+
 If an error persists or you run into a transcript drop mid-meeting, check the hidden developer logs to find the exact error code:
-* **Popup Errors:** Right-click anywhere inside the extension popup window and select **Inspect**. Look at the *Console* tab.
-* **Background Script Errors:** Go to `chrome://extensions/`, enable **Developer mode** (top right toggle), find **Late-Meet**, and click on the `background.ts` / `background.js` link next to "Inspect views".
+
+- **Popup Errors:** Right-click anywhere inside the extension popup window and select **Inspect**. Look at the _Console_ tab.
+- **Background Script Errors:** Go to `chrome://extensions/`, enable **Developer mode** (top right toggle), find **Late-Meet**, and click on the `background.ts` / `background.js` link next to "Inspect views".
 
 ---
 
